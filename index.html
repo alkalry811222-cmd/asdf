@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>정육면체 전개도 3D 시뮬레이터</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Jua & Noto Sans KR for elementary friendly UI) -->
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%);
+            min-height: 100vh;
+        }
+        .font-jua {
+            font-family: 'Jua', sans-serif;
+        }
+        /* Custom scrollbar for comment feed */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Grid cell hover effects */
+        .grid-cell {
+            transition: all 0.15s ease-in-out;
+        }
+        .grid-cell:hover {
+            transform: scale(1.04);
+        }
+        /* Glassmorphism containers */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body class="text-slate-800 flex flex-col min-h-screen">
+
+    <header class="w-full bg-white/80 backdrop-blur-md border-b border-sky-100 sticky top-0 z-30 px-4 py-3 shadow-sm">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-gradient-to-tr from-sky-400 to-indigo-500 rounded-2xl flex items-center justify-center text-2xl text-white shadow-md font-jua">
+                    🧊
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="bg-amber-400 text-amber-950 text-xs font-black px-2.5 py-0.5 rounded-full font-jua">초등 5학년 수학</span>
+                        <span class="text-slate-400 text-xs">직육면체와 정육면체</span>
+                    </div>
+                    <h1 class="text-2xl font-black text-slate-900 font-jua tracking-wide">
+                        정육면체 전개도 3D 탐구 시뮬레이터
+                    </h1>
+                </div>
+            </div>
+
+            <!-- Top Action Badge / Teacher Tip -->
+            <div class="bg-sky-50 border border-sky-200 text-sky-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-medium flex items-center gap-2">
+                <span class="text-lg">👩‍🏫</span>
+                <span><b>선생님 팁:</b> 전개도의 6개 면을 접었을 때 마주보는 면과 이웃하는 면을 관찰해보세요!</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto w-full p-4 sm:p-6 flex-grow grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- LEFT PANEL: 2D Grid Builder & Presets (5 cols) -->
+        <section class="lg:col-span-5 flex flex-col gap-6">
+
+            <!-- 2D Canvas Builder Card -->
+            <div class="glass-card rounded-3xl p-5 shadow-xl border border-emerald-100 flex flex-col gap-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-xl font-black text-slate-800 font-jua flex items-center gap-2">
+                            <span>🎨</span> 2D 전개도 직접 그리기
+                        </h2>
+                        <p class="text-xs text-slate-500">격자를 클릭해 정확히 6개의 정사각형 면을 만들어보세요.</p>
+                    </div>
+                    <span id="face-count-badge" class="bg-emerald-500 text-white font-jua text-sm px-3 py-1 rounded-full shadow">
+                        선택된 면: 0 / 6
+                    </span>
+                </div>
+
+                <!-- Interactive Grid Board (6x6) -->
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex justify-center items-center">
+                    <div id="grid-board" class="grid grid-cols-6 gap-1.5 w-full max-w-[320px] aspect-square bg-slate-200 p-2 rounded-xl">
+                        <!-- Grid cells dynamically generated -->
+                    </div>
+                </div>
+
+                <!-- Grid Controls -->
+                <div class="flex gap-2">
+                    <button onclick="clearGrid()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-1 font-jua">
+                        <span>🧹</span> 지우기
+                    </button>
+                    <button onclick="checkAndValidateNet()" class="flex-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition shadow-md flex items-center justify-center gap-1 font-jua">
+                        <span>🔍</span> 전개도 검증하기
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preset Selection Card (Standard 11 Nets) -->
+            <div class="glass-card rounded-3xl p-5 shadow-xl border border-sky-100 flex flex-col gap-3">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-black text-slate-800 font-jua flex items-center gap-2">
+                        <span>📐</span> 정육면체 기본 전개도 (11가지)
+                    </h2>
+                    <span class="text-xs bg-sky-100 text-sky-800 font-bold px-2.5 py-0.5 rounded-full">교과서 유형</span>
+                </div>
+
+                <!-- Categorized Preset Tabs -->
+                <div class="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                    <div>
+                        <div class="text-xs font-bold text-slate-500 mb-1">1-4-1 형태 (6가지)</div>
+                        <div class="grid grid-cols-3 gap-2" id="preset-group-141"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-slate-500 mb-1">2-3-1 형태 (3가지)</div>
+                        <div class="grid grid-cols-3 gap-2" id="preset-group-231"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-slate-500 mb-1">2-2-2 & 3-3 형태 (2가지)</div>
+                        <div class="grid grid-cols-3 gap-2" id="preset-group-other"></div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- RIGHT PANEL: 3D Folding Viewer & Validation Feedback (7 cols) -->
+        <section class="lg:col-span-7 flex flex-col gap-6">
+
+            <!-- 3D Viewer Container Card -->
+            <div class="glass-card rounded-3xl p-5 shadow-xl border border-indigo-100 flex flex-col gap-4 relative overflow-hidden">
+                
+                <!-- Viewer Top Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-2 z-10">
+                    <div>
+                        <h2 class="text-xl font-black text-slate-800 font-jua flex items-center gap-2">
+                            <span>🧊</span> 3D 접기/펴기 탐구
+                        </h2>
+                        <p class="text-xs text-slate-500">드래그하여 3D 화면을 360도 회전 및 확대해보세요.</p>
+                    </div>
+
+                    <!-- Highlight Opposite Faces Toggle -->
+                    <button id="opposite-highlight-btn" onclick="toggleOppositeHighlight()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition">
+                        <span>🎨</span> 마주보는 면 색칠하기: <b id="highlight-status-text" class="text-indigo-900">OFF</b>
+                    </button>
+                </div>
+
+                <!-- 3D Three.js Canvas Container -->
+                <div class="relative w-full h-[360px] sm:h-[400px] bg-gradient-to-b from-slate-900 to-indigo-950 rounded-2xl overflow-hidden shadow-inner">
+                    <div id="three-canvas-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+                    
+                    <!-- Floating Overlay Validation Status Badge -->
+                    <div id="validation-badge" class="absolute top-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border border-slate-200 flex items-center gap-2 text-sm font-bold font-jua transition-all">
+                        <span id="validation-icon" class="text-xl">✨</span>
+                        <span id="validation-text" class="text-slate-800">전개도를 선택해주세요</span>
+                    </div>
+
+                    <!-- Quick Camera Reset Button -->
+                    <button onclick="resetCamera()" class="absolute bottom-4 right-4 bg-white/80 hover:bg-white text-slate-700 p-2.5 rounded-xl shadow-md backdrop-blur-sm text-xs font-bold flex items-center gap-1 transition">
+                        <span>🎥</span> 시점 리셋
+                    </button>
+                </div>
+
+                <!-- Folding Slider & Control Bar -->
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <label for="fold-slider" class="text-sm font-bold text-slate-700 font-jua flex items-center gap-2">
+                            <span>📦</span> 접기 조절: <span id="fold-percent" class="text-indigo-600 font-black text-base">0%</span>
+                        </label>
+                        <button id="play-pause-btn" onclick="toggleAutoFold()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow font-jua">
+                            <span id="play-btn-icon">▶️</span> <span id="play-btn-text">자동 접기 시작</span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold text-slate-400">평면(0%)</span>
+                        <input id="fold-slider" type="range" min="0" max="100" value="0" oninput="onSliderInput(this.value)" class="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        <span class="text-xs font-bold text-slate-400">입체(100%)</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="glass-card rounded-3xl p-5 shadow-xl border border-amber-100 flex flex-col gap-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-xl font-black text-slate-800 font-jua flex items-center gap-2">
+                            <span>💬</span> 내가 만든 전개도 자랑하기
+                        </h2>
+                        <p class="text-xs text-slate-500">직접 탐구한 전개도를 친구들과 공유하고 의견을 남겨보세요!</p>
+                    </div>
+                    <button onclick="openShareModal()" class="bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold px-4 py-2 rounded-2xl text-xs transition shadow font-jua flex items-center gap-1">
+                        <span>✨</span> 나의 전개도 제출하기
+                    </button>
+                </div>
+
+                <!-- Showcase / Comments List -->
+                <div id="comments-container" class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    <!-- Dynamic comment cards loaded here -->
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <div id="share-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full border-4 border-amber-200 animate-fadeIn">
+            <h3 class="text-2xl font-black text-slate-800 font-jua mb-2 flex items-center gap-2">
+                <span>📝</span> 전개도 등록하기
+            </h3>
+            <p class="text-xs text-slate-500 mb-4">현재 생성된 2D 전개도 형태가 학생 작품으로 추가됩니다.</p>
+            
+            <form onsubmit="submitStudentWork(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">학생 이름/별명</label>
+                    <input type="text" id="share-nickname" required placeholder="예: 5학년 2반 김수학" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">작품 제목</label>
+                    <input type="text" id="share-title" required placeholder="예: 내가 새로 발견한 T자형 전개도" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">학습 소감 / 설명</label>
+                    <textarea id="share-comment" required rows="3" placeholder="접었을 때 마주보는 면이 어떻게 만나는지 설명해보세요!" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"></textarea>
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeShareModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-xl font-jua text-sm">취소</button>
+                    <button type="submit" class="flex-1 bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold py-2.5 rounded-xl font-jua text-sm shadow">등록하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA DEFINITIONS & PRESETS ---
+        const GRID_SIZE = 6;
+        let gridState = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+        let selectedFaceCoords = []; // Array of {r, c}
+        let isOppositeHighlighted = false;
+        let currentFoldAngleProgress = 0; // 0 to 1
+        let autoFoldAnimationId = null;
+
+        // 11 Standard Valid Cube Nets (Given in 6x6 coords [row, col])
+        const STANDARD_NETS = [
+            // 1-4-1 Types (6 variants)
+            { id: '141-1', name: '1-4-1 기본형', group: '141', coords: [[1,1],[2,0],[2,1],[2,2],[2,3],[3,1]] },
+            { id: '141-2', name: '1-4-1 지그재그1', group: '141', coords: [[1,1],[2,0],[2,1],[2,2],[2,3],[3,2]] },
+            { id: '141-3', name: '1-4-1 지그재그2', group: '141', coords: [[1,1],[2,0],[2,1],[2,2],[2,3],[3,3]] },
+            { id: '141-4', name: '1-4-1 계단형', group: '141', coords: [[1,2],[2,0],[2,1],[2,2],[2,3],[3,1]] },
+            { id: '141-5', name: '1-4-1 변형1', group: '141', coords: [[1,2],[2,0],[2,1],[2,2],[2,3],[3,2]] },
+            { id: '141-6', name: '1-4-1 양끝형', group: '141', coords: [[1,0],[2,0],[2,1],[2,2],[2,3],[3,3]] },
+
+            // 2-3-1 Types (3 variants)
+            { id: '231-1', name: '2-3-1 기본형', group: '231', coords: [[1,1],[1,2],[2,2],[2,3],[2,4],[3,4]] },
+            { id: '231-2', name: '2-3-1 변형1', group: '231', coords: [[1,1],[1,2],[2,2],[2,3],[2,4],[3,3]] },
+            { id: '231-3', name: '2-3-1 변형2', group: '231', coords: [[1,1],[1,2],[2,2],[2,3],[2,4],[3,2]] },
+
+            // 2-2-2 Type (1 variant)
+            { id: '222-1', name: '2-2-2 계단형', group: 'other', coords: [[1,1],[1,2],[2,2],[2,3],[3,3],[3,4]] },
+
+            // 3-3 Type (1 variant)
+            { id: '33-1', name: '3-3 대칭형', group: 'other', coords: [[1,1],[1,2],[1,3],[2,3],[2,4],[2,5]] }
+        ];
+
+        // Sample Student Portfolio Comments
+        let studentComments = [
+            { id: 1, name: "5학년 1반 민준", title: "가장 쉬운 1-4-1 기본형!", comment: "십자가 모양처럼 생겨서 접었을 때 어떤 면이 마주보는지 단번에 알아볼 수 있어요!", coords: [[1,1],[2,0],[2,1],[2,2],[2,3],[3,1]] },
+            { id: 2, name: "5학년 3반 서연", title: "계단 모양 2-2-2 전개도", comment: "계단처럼 차곡차곡 올라가는 모양인데 과연 정육면체가 될까 궁금했는데 진짜 딱 맞춰 접혀요!", coords: [[1,1],[1,2],[2,2],[2,3],[3,3],[3,4]] }
+        ];
+
+        // --- THREE.JS 3D SCENE VARIABLES ---
+        let scene, camera, renderer, controls;
+        let netMeshGroup = new THREE.Group();
+        const FACE_SIZE = 1.0;
+        let activeFaceNodes = []; // Hierarchical tree structure for folding simulation
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initGridUI();
+            initPresetsUI();
+            initThreeJS();
+            loadComments();
+            
+            // Load default preset (1-4-1 기본형)
+            loadPreset(STANDARD_NETS[0].id);
+
+            // Responsive Three.js canvas
+            window.addEventListener('resize', onWindowResize);
+        });
+
+        function initGridUI() {
+            const board = document.getElementById('grid-board');
+            board.innerHTML = '';
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const btn = document.createElement('button');
+                    btn.id = `cell-${r}-${c}`;
+                    btn.className = 'grid-cell aspect-square rounded-lg border border-slate-300/80 bg-white shadow-inner flex items-center justify-center font-jua text-xs text-slate-400 font-bold';
+                    btn.onclick = () => toggleGridCell(r, c);
+                    board.appendChild(btn);
+                }
+            }
+        }
+
+        function toggleGridCell(r, c) {
+            if (gridState[r][c]) {
+                gridState[r][c] = false;
+            } else {
+                // Count current active cells
+                const currentCount = selectedFaceCoords.length;
+                if (currentCount >= 6) {
+                    showToast("정육면체는 정확히 6개의 면이 필요합니다!");
+                    return;
+                }
+                gridState[r][c] = true;
+            }
+            updateGridVisuals();
+            syncStateTo3D();
+        }
+
+        function clearGrid() {
+            gridState = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+            updateGridVisuals();
+            syncStateTo3D();
+        }
+
+        function updateGridVisuals() {
+            selectedFaceCoords = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cellBtn = document.getElementById(`cell-${r}-${c}`);
+                    if (gridState[r][c]) {
+                        selectedFaceCoords.push({r, c});
+                        cellBtn.className = 'grid-cell aspect-square rounded-lg bg-emerald-500 text-white font-jua text-sm font-bold shadow-md transform scale-105 transition-all';
+                        cellBtn.textContent = selectedFaceCoords.length;
+                    } else {
+                        cellBtn.className = 'grid-cell aspect-square rounded-lg border border-slate-300/80 bg-white hover:bg-emerald-50 text-slate-300 font-jua text-xs font-bold transition-all';
+                        cellBtn.textContent = '';
+                    }
+                }
+            }
+
+            document.getElementById('face-count-badge').textContent = `선택된 면: ${selectedFaceCoords.length} / 6`;
+        }
+
+        function initPresetsUI() {
+            const p141 = document.getElementById('preset-group-141');
+            const p231 = document.getElementById('preset-group-231');
+            const pOther = document.getElementById('preset-group-other');
+
+            STANDARD_NETS.forEach(preset => {
+                const btn = document.createElement('button');
+                btn.className = 'bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 text-slate-700 font-bold py-1.5 px-2 rounded-xl text-xs transition shadow-sm text-center font-jua truncate';
+                btn.textContent = preset.name;
+                btn.onclick = () => loadPreset(preset.id);
+
+                if (preset.group === '141') p141.appendChild(btn);
+                else if (preset.group === '231') p231.appendChild(btn);
+                else pOther.appendChild(btn);
+            });
+        }
+
+        function loadPreset(presetId) {
+            const target = STANDARD_NETS.find(p => p.id === presetId);
+            if (!target) return;
+
+            gridState = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+            target.coords.forEach(([r, c]) => {
+                gridState[r][c] = true;
+            });
+
+            updateGridVisuals();
+            syncStateTo3D();
+        }
+
+        function initThreeJS() {
+            const container = document.getElementById('three-canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a); // Slate 900 background
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            camera.position.set(0, 6, 8);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.1; // Prevent going under floor
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 7);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // Ground Grid Helper
+            const gridHelper = new THREE.GridHelper(14, 14, 0x38bdf8, 0x1e293b);
+            gridHelper.position.y = -0.01;
+            scene.add(gridHelper);
+
+            // Add Net Parent Group
+            scene.add(netMeshGroup);
+
+            // Render loop
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('three-canvas-container');
+            if (!container) return;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        function resetCamera() {
+            camera.position.set(0, 6, 8);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        function syncStateTo3D() {
+            // Clear existing 3D meshes
+            while(netMeshGroup.children.length > 0){ 
+                netMeshGroup.remove(netMeshGroup.children[0]); 
+            }
+            activeFaceNodes = [];
+
+            if (selectedFaceCoords.length === 0) {
+                updateValidationUI(false, "2D 격자에 면을 선택해주세요");
+                return;
+            }
+
+            if (selectedFaceCoords.length !== 6) {
+                updateValidationUI(false, `현재 ${selectedFaceCoords.length}개 면 선택됨 (6개 필요)`);
+                buildStaticFlats(selectedFaceCoords);
+                return;
+            }
+
+            // Check connectivity and construct tree rooted at first face
+            const treeRoot = buildSpanningTree(selectedFaceCoords);
+
+            if (!treeRoot) {
+                updateValidationUI(false, "모든 면이 서로 연결되어 있어야 합니다!");
+                buildStaticFlats(selectedFaceCoords);
+                return;
+            }
+
+            // Build 3D mesh hierarchy from tree
+            const centerOffset = calculateCenterOffset(selectedFaceCoords);
+            buildHierarchy3DMesh(treeRoot, netMeshGroup, centerOffset);
+
+            // Validate if valid cube
+            const isValid = validateCubeFolding(selectedFaceCoords);
+            if (isValid) {
+                updateValidationUI(true, "올바른 정육면체 전개도예요! 🎉");
+            } else {
+                updateValidationUI(false, "접었을 때 면이 겹치거나 비어요! 🧐");
+            }
+
+            // Apply current fold angle
+            applyFoldAngle(currentFoldAngleProgress);
+        }
+
+        // Calculate offset so net stays centered on grid floor
+        function calculateCenterOffset(coords) {
+            let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+            coords.forEach(({r, c}) => {
+                minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+                minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+            });
+            return {
+                r: (minR + maxR) / 2,
+                c: (minC + maxC) / 2
+            };
+        }
+
+        // Build Spanning Tree (BFS) for folding hinges
+        function buildSpanningTree(coords) {
+            const coordMap = new Map();
+            coords.forEach((item, index) => coordMap.set(`${item.r},${item.c}`, { index, ...item }));
+
+            const visited = new Set();
+            const rootNode = {
+                index: 0,
+                r: coords[0].r,
+                c: coords[0].c,
+                children: []
+            };
+
+            const queue = [rootNode];
+            visited.add(`${coords[0].r},${coords[0].c}`);
+
+            let visitedCount = 1;
+
+            const DR = [-1, 1, 0, 0];
+            const DC = [0, 0, -1, 1];
+            const DIR_NAME = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
+
+            while (queue.length > 0) {
+                const current = queue.shift();
+
+                for (let d = 0; d < 4; d++) {
+                    const nr = current.r + DR[d];
+                    const nc = current.c + DC[d];
+                    const key = `${nr},${nc}`;
+
+                    if (coordMap.has(key) && !visited.has(key)) {
+                        visited.add(key);
+                        visitedCount++;
+                        const childNode = {
+                            index: coordMap.get(key).index,
+                            r: nr,
+                            c: nc,
+                            dir: DIR_NAME[d], // Direction relative to parent
+                            children: []
+                        };
+                        current.children.push(childNode);
+                        queue.push(childNode);
+                    }
+                }
+            }
+
+            return visitedCount === coords.length ? rootNode : null;
+        }
+
+        // Render static disconnected squares when net is incomplete
+        function buildStaticFlats(coords) {
+            const offset = calculateCenterOffset(coords);
+            coords.forEach((item, i) => {
+                const mesh = createFaceMesh(i + 1, false);
+                mesh.position.set((item.c - offset.c) * FACE_SIZE, 0, (item.r - offset.r) * FACE_SIZE);
+                mesh.rotation.x = -Math.PI / 2;
+                netMeshGroup.add(mesh);
+            });
+        }
+
+        // Recursively build Three.js Object3D hierarchy with hinge points
+        function buildHierarchy3DMesh(treeNode, parent3D, centerOffset, isRoot = true) {
+            const pivotGroup = new THREE.Group();
+
+            if (isRoot) {
+                pivotGroup.position.set(0, 0, 0);
+            }
+
+            const faceMesh = createFaceMesh(treeNode.index + 1, false);
+            // Orient plane flat facing up
+            faceMesh.rotation.x = -Math.PI / 2;
+
+            if (isRoot) {
+                faceMesh.position.set(0, 0, 0);
+                pivotGroup.add(faceMesh);
+            } else {
+                // Place relative to parent's hinge
+                faceMesh.position.set(0, 0, 0);
+            }
+
+            const nodeRecord = {
+                index: treeNode.index,
+                dir: treeNode.dir,
+                pivot: pivotGroup,
+                mesh: faceMesh,
+                children: []
+            };
+            activeFaceNodes.push(nodeRecord);
+
+            parent3D.add(pivotGroup);
+
+            // Process child faces
+            treeNode.children.forEach(child => {
+                const childPivot = new THREE.Group();
+                
+                // Position hinge along relative edge of parent
+                if (child.dir === 'RIGHT') childPivot.position.set(FACE_SIZE / 2, 0, 0);
+                if (child.dir === 'LEFT') childPivot.position.set(-FACE_SIZE / 2, 0, 0);
+                if (child.dir === 'DOWN') childPivot.position.set(0, 0, FACE_SIZE / 2);
+                if (child.dir === 'UP') childPivot.position.set(0, 0, -FACE_SIZE / 2);
+
+                // Internal shift for child plane center
+                const childMesh = createFaceMesh(child.index + 1, false);
+                childMesh.rotation.x = -Math.PI / 2;
+                
+                if (child.dir === 'RIGHT') childMesh.position.set(FACE_SIZE / 2, 0, 0);
+                if (child.dir === 'LEFT') childMesh.position.set(-FACE_SIZE / 2, 0, 0);
+                if (child.dir === 'DOWN') childMesh.position.set(0, 0, FACE_SIZE / 2);
+                if (child.dir === 'UP') childMesh.position.set(0, 0, -FACE_SIZE / 2);
+
+                childPivot.add(childMesh);
+
+                const childRecord = {
+                    index: child.index,
+                    dir: child.dir,
+                    pivot: childPivot,
+                    mesh: childMesh,
+                    children: []
+                };
+                activeFaceNodes.push(childRecord);
+
+                pivotGroup.add(childPivot);
+
+                // Recursive build for descendants
+                buildHierarchyDescendants(child, childPivot);
+            });
+        }
+
+        function buildHierarchyDescendants(treeNode, parentPivot) {
+            treeNode.children.forEach(child => {
+                const childPivot = new THREE.Group();
+
+                if (child.dir === 'RIGHT') childPivot.position.set(FACE_SIZE, 0, 0);
+                if (child.dir === 'LEFT') childPivot.position.set(-FACE_SIZE, 0, 0);
+                if (child.dir === 'DOWN') childPivot.position.set(0, 0, FACE_SIZE);
+                if (child.dir === 'UP') childPivot.position.set(0, 0, -FACE_SIZE);
+
+                const childMesh = createFaceMesh(child.index + 1, false);
+                childMesh.rotation.x = -Math.PI / 2;
+                childMesh.position.set(0,0,0);
+
+                // Offset mesh inside pivot
+                if (child.dir === 'RIGHT') childMesh.position.set(FACE_SIZE / 2, 0, 0);
+                if (child.dir === 'LEFT') childMesh.position.set(-FACE_SIZE / 2, 0, 0);
+                if (child.dir === 'DOWN') childMesh.position.set(0, 0, FACE_SIZE / 2);
+                if (child.dir === 'UP') childMesh.position.set(0, 0, -FACE_SIZE / 2);
+
+                childPivot.add(childMesh);
+
+                const childRecord = {
+                    index: child.index,
+                    dir: child.dir,
+                    pivot: childPivot,
+                    mesh: childMesh,
+                    children: []
+                };
+                activeFaceNodes.push(childRecord);
+
+                parentPivot.add(childPivot);
+                buildHierarchyDescendants(child, childPivot);
+            });
+        }
+
+        // Create individual face mesh with face number canvas texture
+        function createFaceMesh(faceNum, isOpposite) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            // Background
+            ctx.fillStyle = '#38bdf8'; // Default Sky blue
+            ctx.fillRect(0, 0, 256, 256);
+
+            // Border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 12;
+            ctx.strokeRect(6, 6, 244, 244);
+
+            // Inner Accent Border
+            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(20, 20, 216, 216);
+
+            // Face Number Text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 120px Jua, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(faceNum.toString(), 128, 132);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const geometry = new THREE.PlaneGeometry(FACE_SIZE * 0.96, FACE_SIZE * 0.96);
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+                roughness: 0.3,
+                metalness: 0.1
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData = { faceNum };
+            return mesh;
+        }
+
+        function onSliderInput(val) {
+            currentFoldAngleProgress = val / 100;
+            document.getElementById('fold-percent').textContent = `${val}%`;
+            applyFoldAngle(currentFoldAngleProgress);
+        }
+
+        function applyFoldAngle(progress) {
+            const targetAngle = (Math.PI / 2) * progress;
+
+            activeFaceNodes.forEach(node => {
+                if (!node.dir) return; // Root face doesn't rotate
+
+                if (node.dir === 'RIGHT') node.pivot.rotation.z = -targetAngle;
+                if (node.dir === 'LEFT') node.pivot.rotation.z = targetAngle;
+                if (node.dir === 'DOWN') node.pivot.rotation.x = targetAngle;
+                if (node.dir === 'UP') node.pivot.rotation.x = -targetAngle;
+            });
+        }
+
+        function toggleAutoFold() {
+            const btnText = document.getElementById('play-btn-text');
+            const btnIcon = document.getElementById('play-btn-icon');
+
+            if (autoFoldAnimationId) {
+                // Pause
+                cancelAnimationFrame(autoFoldAnimationId);
+                autoFoldAnimationId = null;
+                btnText.textContent = "자동 접기 시작";
+                btnIcon.textContent = "▶️";
+            } else {
+                // Play
+                btnText.textContent = "일시 정지";
+                btnIcon.textContent = "⏸️";
+                animateFoldingStep();
+            }
+        }
+
+        let foldDirection = 1; // 1 = folding, -1 = unfolding
+        function animateFoldingStep() {
+            let currentVal = parseFloat(document.getElementById('fold-slider').value);
+            currentVal += foldDirection * 0.8;
+
+            if (currentVal >= 100) {
+                currentVal = 100;
+                foldDirection = -1;
+            } else if (currentVal <= 0) {
+                currentVal = 0;
+                foldDirection = 1;
+            }
+
+            document.getElementById('fold-slider').value = currentVal;
+            onSliderInput(currentVal);
+
+            autoFoldAnimationId = requestAnimationFrame(animateFoldingStep);
+        }
+
+        function validateCubeFolding(coords) {
+            if (coords.length !== 6) return false;
+
+            // Check if matches any of the 11 known standard canonical net shapes
+            // Normalize shape coordinates (shift to origin 0,0)
+            const normalizedShape = normalizeCoords(coords);
+
+            for (const preset of STANDARD_NETS) {
+                const presetNorm = normalizeCoords(preset.coords.map(([r, c]) => ({r, c})));
+                
+                // Compare shape across all 8 possible 2D rotations and reflections
+                if (isCongruent2DShape(normalizedShape, presetNorm)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        function normalizeCoords(coords) {
+            let minR = Math.min(...coords.map(c => c.r));
+            let minC = Math.min(...coords.map(c => c.c));
+            return coords.map(c => ({ r: c.r - minR, c: c.c - minC })).sort((a,b) => a.r !== b.r ? a.r - b.r : a.c - b.c);
+        }
+
+        function isCongruent2DShape(shapeA, shapeB) {
+            let current = shapeA;
+            for (let rot = 0; rot < 4; rot++) {
+                if (isEqualShape(current, shapeB)) return true;
+                // Flip horizontally
+                if (isEqualShape(flipShape(current), shapeB)) return true;
+                current = rotateShape90(current);
+            }
+            return false;
+        }
+
+        function rotateShape90(coords) {
+            const rotated = coords.map(c => ({ r: c.c, c: -c.r }));
+            return normalizeCoords(rotated);
+        }
+
+        function flipShape(coords) {
+            const flipped = coords.map(c => ({ r: c.r, c: -c.c }));
+            return normalizeCoords(flipped);
+        }
+
+        function isEqualShape(shapeA, shapeB) {
+            if (shapeA.length !== shapeB.length) return false;
+            for (let i = 0; i < shapeA.length; i++) {
+                if (shapeA[i].r !== shapeB[i].r || shapeA[i].c !== shapeB[i].c) return false;
+            }
+            return true;
+        }
+
+        function checkAndValidateNet() {
+            const isValid = validateCubeFolding(selectedFaceCoords);
+            if (isValid) {
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+                showToast("🎉 축하합니다! 올바른 정육면체 전개도입니다.");
+            } else {
+                showToast("🧐 면의 개수를 확인하거나 모양을 다시 변경해보세요.");
+            }
+        }
+
+        function updateValidationUI(isValid, message) {
+            const badge = document.getElementById('validation-badge');
+            const icon = document.getElementById('validation-icon');
+            const text = document.getElementById('validation-text');
+
+            text.textContent = message;
+
+            if (isValid) {
+                badge.className = "absolute top-4 left-4 bg-emerald-500 text-white px-4 py-2 rounded-2xl shadow-lg border border-emerald-400 flex items-center gap-2 text-sm font-bold font-jua animate-bounce";
+                icon.textContent = "🎉";
+            } else {
+                badge.className = "absolute top-4 left-4 bg-amber-500 text-white px-4 py-2 rounded-2xl shadow-lg border border-amber-400 flex items-center gap-2 text-sm font-bold font-jua";
+                icon.textContent = "🧐";
+            }
+        }
+
+        function toggleOppositeHighlight() {
+            isOppositeHighlighted = !isOppositeHighlighted;
+            const statusText = document.getElementById('highlight-status-text');
+            statusText.textContent = isOppositeHighlighted ? 'ON' : 'OFF';
+
+            const colors = ['#f43f5e', '#f43f5e', '#10b981', '#10b981', '#8b5cf6', '#8b5cf6']; // Matching pairs
+
+            activeFaceNodes.forEach((node, idx) => {
+                const mesh = node.mesh;
+                const canvas = document.createElement('canvas');
+                canvas.width = 256; canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+
+                ctx.fillStyle = isOppositeHighlighted ? colors[idx % 6] : '#38bdf8';
+                ctx.fillRect(0, 0, 256, 256);
+
+                ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 12;
+                ctx.strokeRect(6, 6, 244, 244);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 120px Jua, sans-serif';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText((idx + 1).toString(), 128, 132);
+
+                mesh.material.map = new THREE.CanvasTexture(canvas);
+                mesh.material.needsUpdate = true;
+            });
+        }
+
+        function loadComments() {
+            const saved = localStorage.getItem('cube_net_comments');
+            if (saved) {
+                studentComments = JSON.parse(saved);
+            }
+            renderComments();
+        }
+
+        function renderComments() {
+            const container = document.getElementById('comments-container');
+            container.innerHTML = '';
+
+            studentComments.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col gap-2";
+                
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-800 text-sm font-jua">👤 ${item.name}</span>
+                        <button onclick='loadStudentNet(${JSON.stringify(item.coords)})' class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-3 py-1 rounded-xl text-xs font-jua transition">
+                            ▶️ 불러와서 접어보기
+                        </button>
+                    </div>
+                    <div class="font-bold text-slate-900 text-base font-jua">${item.title}</div>
+                    <p class="text-xs text-slate-600 leading-relaxed">${item.comment}</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function loadStudentNet(coords) {
+            gridState = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+            coords.forEach(([r, c]) => {
+                gridState[r][c] = true;
+            });
+            updateGridVisuals();
+            syncStateTo3D();
+            showToast("학생 작성 전개도를 불러왔습니다!");
+        }
+
+        function openShareModal() {
+            if (selectedFaceCoords.length !== 6) {
+                showToast("전개도의 6개 면을 완성한 후 제출해주세요!");
+                return;
+            }
+            document.getElementById('share-modal').classList.remove('hidden');
+        }
+
+        function closeShareModal() {
+            document.getElementById('share-modal').classList.add('hidden');
+        }
+
+        function submitStudentWork(e) {
+            e.preventDefault();
+            const name = document.getElementById('share-nickname').value;
+            const title = document.getElementById('share-title').value;
+            const comment = document.getElementById('share-comment').value;
+
+            const newWork = {
+                id: Date.now(),
+                name,
+                title,
+                comment,
+                coords: selectedFaceCoords.map(item => [item.r, item.c])
+            };
+
+            studentComments.unshift(newWork);
+            localStorage.setItem('cube_net_comments', JSON.stringify(studentComments));
+            
+            renderComments();
+            closeShareModal();
+
+            // Clear inputs
+            document.getElementById('share-nickname').value = '';
+            document.getElementById('share-title').value = '';
+            document.getElementById('share-comment').value = '';
+
+            confetti({ particleCount: 80, spread: 60 });
+            showToast("성공적으로 등록되었습니다!");
+        }
+
+        // Custom Toast Helper
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900/90 text-white font-jua px-6 py-3 rounded-2xl shadow-2xl z-50 text-sm border border-slate-700 animate-bounce';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
